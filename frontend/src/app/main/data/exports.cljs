@@ -50,25 +50,44 @@
      (watch [_ state _]
        (let [file-id  (:current-file-id state)
              page-id  (:current-page-id state)
+
+             filename (-> (wsh/lookup-page state page-id) :name)
              selected (or selected (wsh/lookup-selected state page-id {}))
-             page     (wsh/lookup-page state page-id)
+
              shapes   (if (seq selected)
                         (wsh/lookup-shapes state selected)
-                        (wsh/filter-shapes state #(pos? (count (:exports %)))))]
-         (rx/of (modal/show :export-shapes {:shapes shapes
-                                            :filename (:name page)
-                                            :page-id page-id
-                                            :file-id file-id})))))))
+                        (wsh/filter-shapes state #(pos? (count (:exports %)))))
+
+             exports  (for [shape  shapes
+                            export (:exports shapes)]
+                        (-> export
+                            (assoc :enabled true)
+                            (assoc :page-id page-id)
+                            (assoc :file-id file-id)
+                            (assoc :object-id (:id shape))
+                            (assoc :shape (dissoc shape :exports))
+                            (assoc :name (:name shape))))]
+
+         (rx/of (modal/show :export-shapes
+                            {:exports (vec exports)
+                             :filename filename})))))))
 
 (defn show-viewer-export-dialog
-  [{:keys [shapes filename page-id file-id]}]
+  [{:keys [shapes filename page-id file-id exports]}]
   (ptk/reify ::show-viewer-export-dialog
     ptk/WatchEvent
     (watch [_ _ _]
-      (rx/of (modal/show :export-shapes {:shapes shapes
-                                         :filename filename
-                                         :page-id page-id
-                                         :file-id file-id})))))
+      (let [exports (for [shape shapes
+                          export exports]
+                      (-> export
+                          (assoc :enabled true)
+                          (assoc :page-id page-id)
+                          (assoc :file-id file-id)
+                          (assoc :object-id (:id shape))
+                          (assoc :shape (dissoc shape :exports))
+                          (assoc :name (:name shape))))]
+        (rx/of (modal/show :export-shapes {:exports (vec exports)
+                                           :filename filename}))))))
 
 (defn- initialize-export-status
   [exports filename resource-id]
@@ -110,18 +129,22 @@
 (defn request-simple-export
   [{:keys [export filename]}]
   (ptk/reify ::request-simple-export
-    ptk/WatchEvent
-    (watch [_ _ _]
-      (rx/of ::dwp/force-persist))
+    ptk/UpdateEvent
+    (update [_ state]
+      (update state :export assoc :in-progress true))
 
-    ptk/EffectEvent
-    (effect [_ state _]
+    ptk/WatchEvent
+    (watch [_ state _]
       (let [profile-id (:profile-id state)
             params     {:exports [export]
                         :profile-id profile-id}]
-        (->> (rp/query! :export-shapes-simple params)
-             (rx/subs (fn [data]
-                        (dom/trigger-download filename data))))))))
+        (rx/concat
+         (rx/of ::dwp/force-persist)
+         (->> (rp/query! :export-shapes-simple params)
+              (rx/map (fn [data]
+                        (dom/trigger-download filename data)
+                        (fn [state]
+                          (dissoc state :export))))))))))
 
 (defn request-multiple-export
   [{:keys [filename exports] :as params}]

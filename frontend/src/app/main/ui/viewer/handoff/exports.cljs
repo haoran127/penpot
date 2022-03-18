@@ -37,6 +37,7 @@
           (dom/prevent-default event)
           (if (= :multiple type)
             (st/emit! (de/show-viewer-export-dialog {:shapes shapes
+                                                     :exports @exports
                                                      :filename filename
                                                      :page-id page-id
                                                      :file-id file-id}))

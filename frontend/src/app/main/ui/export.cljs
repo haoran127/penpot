@@ -37,20 +37,17 @@
 (mf/defc export-shapes-dialog
   {::mf/register modal/components
    ::mf/register-as :export-shapes}
-  [{:keys [shapes page-id file-id filename]}]
+  [{:keys [exports filename]}]
   (let [lstate          (mf/deref refs/export)
         in-progress?    (:in-progress lstate)
 
-        exports         (mf/use-state (prepare-exports-data shapes file-id page-id))
+        exports         (mf/use-state exports)
 
-        all-exports     (into [] (mapcat :exports) @exports)
+        all-exports     (deref exports)
         all-checked?    (every? :enabled all-exports)
         all-unchecked?  (every? (complement :enabled) all-exports)
 
-        enabled-exports (into []
-                              (comp (mapcat :exports)
-                                    (filter :enabled))
-                              @exports)
+        enabled-exports (into [] (filter :enabled) @exports)
 
         cancel-fn
         (fn [event]
@@ -61,18 +58,16 @@
         (fn [event]
           (dom/prevent-default event)
           (st/emit! (modal/hide)
-                    (de/request-multiple-export {:filename filename
-                                                 :exports enabled-exports})))
+                    (de/request-multiple-export {:filename filename :exports enabled-exports})))
         on-toggle-enabled
-        (fn [_ shape-index export-index]
-          (swap! exports update-in [shape-index :exports export-index :enabled] not))
+        (fn [index]
+          (swap! exports update-in [index :enabled] not))
 
         change-all
         (fn [_]
-          (let [update-export #(assoc % :enabled (not all-checked?))
-                update-shape  #(assoc % :exports (mapv update-export (:exports %)))]
-            (reset! exports (mapv update-shape shapes))))]
-
+          (swap! exports (fn [exports]
+                           (mapv #(assoc % :enabled (not all-checked?)) exports))))
+        ]
     [:div.modal-overlay
      [:div.modal-container.export-shapes-dialog
       {:class (when (empty? all-exports) "no-shapes")}
@@ -99,34 +94,31 @@
                                   (c (count all-exports)))]]
 
            [:div.body
-            (for [[shape-index shape] (d/enumerate shapes)]
-              (for [[export-index export] (d/enumerate (:exports shape))]
-                (let [{:keys [x y width height]} (:selrect shape)
-                      shape-name    (:name shape)
-                      export-suffix (:suffix export)]
-                  [:div.row
-                   [:div.field.check {:on-click #(on-toggle-enabled % shape-index export-index)}
-                    (if (get-in @exports [shape-index :exports export-index :enabled])
-                      [:span i/checkbox-checked]
-                      [:span i/checkbox-unchecked])]
+            (for [[index {:keys [shape suffix] :as export}] (d/enumerate @exports)]
+              (let [{:keys [x y width height]} (:selrect shape)]
+                [:div.row
+                 [:div.field.check {:on-click #(on-toggle-enabled index)}
+                  (if (:enabled export)
+                    [:span i/checkbox-checked]
+                    [:span i/checkbox-unchecked])]
 
-                   [:div.field.image
-                    [:svg {:view-box (dm/str x " " y " " width " " height)
-                           :width 24
-                           :height 20
-                           :version "1.1"
-                           :xmlns "http://www.w3.org/2000/svg"
-                           :xmlnsXlink "http://www.w3.org/1999/xlink"
-                           ;; Fix Chromium bug about color of html texts
-                           ;; https://bugs.chromium.org/p/chromium/issues/detail?id=1244560#c5
-                           :style {:-webkit-print-color-adjust :exact}}
+                 [:div.field.image
+                  [:svg {:view-box (dm/str x " " y " " width " " height)
+                         :width 24
+                         :height 20
+                         :version "1.1"
+                         :xmlns "http://www.w3.org/2000/svg"
+                         :xmlnsXlink "http://www.w3.org/1999/xlink"
+                         ;; Fix Chromium bug about color of html texts
+                         ;; https://bugs.chromium.org/p/chromium/issues/detail?id=1244560#c5
+                         :style {:-webkit-print-color-adjust :exact}}
 
-                     [:& shape-wrapper {:shape shape}]]]
+                   [:& shape-wrapper {:shape shape}]]]
 
-                   [:div.field.name (cond-> shape-name export-suffix (str export-suffix))]
-                   [:div.field.scale (dm/str (* width (:scale export)) "x"
-                                             (* height (:scale export)) "px ")]
-                   [:div.field.extension (-> export :type d/name str/upper)]])))]
+                 [:div.field.name (cond-> (:name shape) suffix (str suffix))]
+                 [:div.field.scale (dm/str (* width (:scale export)) "x"
+                                           (* height (:scale export)) "px ")]
+                 [:div.field.extension (-> export :type d/name str/upper)]]))]
 
            [:div.modal-footer
             [:div.action-buttons
