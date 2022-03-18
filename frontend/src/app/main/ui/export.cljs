@@ -137,8 +137,8 @@
 
              [:input.accept-button.primary
               {:class (dom/classnames
-                       :btn-disabled in-progress?)
-               :disabled in-progress?
+                       :btn-disabled (or in-progress? all-unchecked?))
+               :disabled (or in-progress? all-unchecked?)
                :type "button"
                :value (if in-progress?
                         (tr "workspace.options.exporting-object")
@@ -149,7 +149,9 @@
            [:img {:src "images/export-no-shapes.png" :border "0"}]
            [:p (tr "dashboard.export-shapes.no-elements")]
            [:p (tr "dashboard.export-shapes.how-to")]
-           [:p (tr "dashboard.export-shapes.how-to-link")]])]]]]))
+           [:p [:a {:target "_blank"
+                    :href "https://help.penpot.app/user-guide/exporting/ "}
+                (tr "dashboard.export-shapes.how-to-link")]]])]]]]))
 
 (mf/defc export-progress-widget
   {::mf/wrap [mf/memo]}
