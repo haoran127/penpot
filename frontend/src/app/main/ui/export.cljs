@@ -32,7 +32,7 @@
                                                  (assoc :object-id id)
                                                  (assoc :name name)))
                                            exports))))]
-    (sequence (map process-shape) shapes)))
+    (into [] (map process-shape) shapes)))
 
 (mf/defc export-shapes-dialog
   {::mf/register modal/components

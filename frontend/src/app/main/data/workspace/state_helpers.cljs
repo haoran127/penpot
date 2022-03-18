@@ -64,7 +64,7 @@
 
 (defn filter-shapes
   ([state filter-fn]
-   (lookup-shapes state (:current-page-id state) filter-fn))
+   (filter-shapes state (:current-page-id state) filter-fn))
   ([state page-id filter-fn]
    (let [objects (lookup-page-objects state page-id)]
      (into [] (filter filter-fn) (vals objects)))))
